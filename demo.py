@@ -1,7 +1,8 @@
 """
 Created on Mon Mar 25 21:29:05 2019
-
 @author: bhaum
+Modifyed:
+Miguel Pari Soto
 """
 
 # USAGE
@@ -19,57 +20,8 @@ import pickle
 import time
 import cv2
 
-ap = argparse.ArgumentParser()
-ap.add_argument(
-    '-m',
-    '--model',
-    type=str,
-    # required=True,
-    default='liveness.model',
-    help='path to trained model')
-ap.add_argument(
-    '-l',
-    '--le',
-    type=str,
-    # required=True,
-    default='le.pickle',
-    help='path to label encoder')
-ap.add_argument('-d',
-                '--detector',
-                type=str,
-                default='face_detector',
-                help="path to OpenCV's deep learning face detector")
-ap.add_argument('-c',
-                '--confidence',
-                type=float,
-                default=0.5,
-                help='minimum probability accdepting detected faces')
-args = vars(ap.parse_args())
 
-# load our serialized face detector from disk
-print('[INFO] loading face detector...')
-protoPath = str(Path(args['detector']) / 'deploy.prototxt')
-modelPath = str(Path(args['detector']) / 'res10_300x300_ssd_iter_140000.caffemodel')
-net = cv2.dnn.readNetFromCaffe(protoPath, modelPath)
-
-# load the liveness detector model and label encoder from disk
-print('[INFO] loading liveness detector...')
-model = load_model(args['model'])
-le = pickle.loads(open(args['le'], 'rb').read())
-
-# initialize the video stream and allow the camera sensor to warmup
-print('[INFO] starting video stream...')
-cap = cv2.VideoCapture(0)
-
-fps = FPS().start()
-# loop over the frames from the video stream
-while (cap.isOpened()):
-    # grab the frame from the threaded video stream and resize it
-    # to have a maximum width of 600 pixels
-    ret, frame = cap.read()
-    e1 = cv2.getTickCount()
-    # frame = imutils.resize(frame, width=600)
-
+def analyze(frame, conf, net, model):
     # grab the frame dimensions and convert it to a blob
     (h, w) = frame.shape[:2]
     blob = cv2.dnn.blobFromImage(cv2.resize(frame, (300, 300)), 1.0,
@@ -87,7 +39,7 @@ while (cap.isOpened()):
         confidence = detections[0, 0, i, 2]
 
         # filter out weak detections
-        if confidence > args['confidence']:
+        if confidence > conf:
             # compute the (x, y)-coordinates of the bounding box for
             # the face and extract the face ROI
             box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])
@@ -103,7 +55,6 @@ while (cap.isOpened()):
             # extract the face ROI and then preprocess it in the exact
             # same manner as our training data
             face = frame[startY:endY, startX:endX]
-            # print(face.shape)
             if face.shape[0] < 64 or face.shape[1] < 64:
                 continue
             face = cv2.resize(face, (64, 64))
@@ -126,13 +77,64 @@ while (cap.isOpened()):
             f = cv2.FONT_HERSHEY_SIMPLEX
             cv2.putText(frame, label, (startX, startY - 10), f, 0.5, color, 2)
             cv2.rectangle(frame, (startX, startY), (endX, endY), color, 2)
+    return frame
 
+
+ap = argparse.ArgumentParser()
+ap.add_argument('-m',
+                '--model',
+                type=str,
+                default='liveness.model',
+                help='path to trained model')
+ap.add_argument('-l',
+                '--le',
+                type=str,
+                default='le.pickle',
+                help='path to label encoder')
+ap.add_argument('-d',
+                '--detector',
+                type=str,
+                default='face_detector',
+                help="path to OpenCV's deep learning face detector")
+ap.add_argument('-c',
+                '--confidence',
+                type=float,
+                default=0.5,
+                help='minimum probability accdepting detected faces')
+args = vars(ap.parse_args())
+
+# load our serialized face detector from disk
+print('[INFO] loading face detector...')
+protoPath = str(Path(args['detector']) / 'deploy.prototxt')
+modelPath = str(
+    Path(args['detector']) / 'res10_300x300_ssd_iter_140000.caffemodel')
+net = cv2.dnn.readNetFromCaffe(protoPath, modelPath)
+
+# load the liveness detector model and label encoder from disk
+print('[INFO] loading liveness detector...')
+model = load_model(args['model'])
+le = pickle.loads(open(args['le'], 'rb').read())
+
+# initialize the video stream and allow the camera sensor to warmup
+print('[INFO] starting video stream...')
+cap = cv2.VideoCapture(0)
+time.sleep(2.0)
+
+fps = FPS().start()
+# loop over the frames from the video stream
+while (cap.isOpened()):
+    # grab the frame from the threaded video stream and resize it
+    # to have a maximum width of 600 pixels
+    frame = cap.read()[1]
+    e1 = cv2.getTickCount()
+    frame = imutils.resize(frame, width=600)
+    frame = analyze(frame, args['confidence'], net, model)
     # show the output frame and wait for a key press
     cv2.imshow('Frame', frame)
     e2 = cv2.getTickCount()
     time1 = (e2 - e1) / cv2.getTickFrequency()
     print(f'[INFO] elasped time: {time1:.2f}')
-    print(f'[INFO] approx. FPS: {1/time1:.2f}')
+    # print(f'[INFO] approx. FPS: {1/time1:.2f}')
     key = cv2.waitKey(1) & 0xFF
 
     # if the `q` key was pressed, break from the loop

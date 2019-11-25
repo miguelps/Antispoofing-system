@@ -3,7 +3,7 @@
 
 # set the matplotlib backend so figures can be saved in the background
 import matplotlib
-matplotlib.use("Agg")
+matplotlib.use('Agg')
 
 # import the necessary packages
 from spoofing.livenessnet import LivenessNet
@@ -23,35 +23,37 @@ import cv2
 
 # construct the argument parser and parse the arguments
 ap = argparse.ArgumentParser()
-ap.add_argument("-d", "--dataset", required=True, help="path to input dataset")
-ap.add_argument("-m",
-                "--model",
+ap.add_argument('-d',
+                '--dataset',
+                required=True,
+                help='path to input dataset (input)')
+ap.add_argument('-m',
+                '--model',
                 type=str,
                 required=True,
-                help="path to trained model")
-ap.add_argument("-l",
-                "--le",
+                help='path to trained model (output)')
+ap.add_argument('-l',
+                '--le',
                 type=str,
                 required=True,
-                help="path to label encoder")
-ap.add_argument("-p",
-                "--plot",
+                help='path to label encoder (output)')
+ap.add_argument('-p',
+                '--plot',
                 type=str,
-                default="plot.png",
-                help="path to output loss/accuracy plot")
+                default='plot.png',
+                help='path to output loss/accuracy plot (output)')
 args = vars(ap.parse_args())
 
 # initialize the initial learning rate, batch size, and number of
 # epochs to train for
 INIT_LR = 1e-4
 BS = 64
-EPOCHS = 100
+EPOCHS = 10
 
 # grab the list of images in our dataset directory, then initialize
 # the list of data (i.e., images) and class images
-print("[INFO] loading images...")
-imagePaths = list(paths.list_images(args["dataset"]))
-print(imagePaths)
+print('[INFO] loading images...')
+imagePaths = list(paths.list_images(args['dataset']))
 
 data = []
 labels = []
@@ -59,7 +61,7 @@ labels = []
 for imagePath in imagePaths:
     # extract the class label from the filename, load the image and
     # resize it to be a fixed 32x32 pixels, ignoring aspect ratio
-    label = Path(imagePath).parent.stem
+    label = Path(imagePath).parents[1].stem
     image = cv2.imread(imagePath)
     image = cv2.resize(image, (64, 64))
 
@@ -69,7 +71,7 @@ for imagePath in imagePaths:
 
 # convert the data into a NumPy array, then preprocess it by scaling
 # all pixel intensities to the range [0, 1]
-data = np.array(data, dtype="float") / 255.0
+data = np.array(data, dtype='float') / 255.0
 
 # encode the labels (which are currently strings) as integers and then
 # one-hot encode them
@@ -91,51 +93,50 @@ aug = ImageDataGenerator(rotation_range=20,
                          height_shift_range=0.2,
                          shear_range=0.15,
                          horizontal_flip=False,
-                         fill_mode="nearest")
+                         fill_mode='nearest')
 
 # initialize the optimizer and model
-print("[INFO] compiling model...")
+print('[INFO] compiling model...')
 opt = Adam(lr=INIT_LR, decay=INIT_LR / EPOCHS)
 model = LivenessNet.build(width=64,
                           height=64,
                           depth=3,
                           classes=len(le.classes_))
 model.summary()
-model.compile(loss="binary_crossentropy", optimizer=opt, metrics=["accuracy"])
+model.compile(loss='binary_crossentropy', optimizer=opt, metrics=['accuracy'])
 
 # train the network
-print("[INFO] training network for {} epochs...".format(EPOCHS))
+print(f'[INFO] training network for {EPOCHS} epochs...')
 H = model.fit_generator(aug.flow(trainX, trainY, batch_size=BS),
                         validation_data=(testX, testY),
                         steps_per_epoch=len(trainX) // BS,
                         epochs=EPOCHS)
 
 # evaluate the network
-print("[INFO] evaluating network...")
+print('[INFO] evaluating network...')
 predictions = model.predict(testX, batch_size=BS)
-print(
-    classification_report(testY.argmax(axis=1),
-                          predictions.argmax(axis=1),
-                          target_names=le.classes_))
+print(classification_report(testY.argmax(axis=1),
+      predictions.argmax(axis=1),
+      target_names=le.classes_))
 
 # save the network to disk
-print("[INFO] serializing network to '{}'...".format(args["model"]))
-model.save(args["model"])
+print(f"[INFO] serializing network to '{args['model']}'...")
+model.save(args['model'])
 
 # save the label encoder to disk
-f = open(args["le"], "wb")
+f = open(args['le'], 'wb')
 f.write(pickle.dumps(le))
 f.close()
 
 # plot the training loss and accuracy
-plt.style.use("ggplot")
+plt.style.use('ggplot')
 plt.figure()
-plt.plot(np.arange(0, EPOCHS), H.history["loss"], label="train_loss")
-plt.plot(np.arange(0, EPOCHS), H.history["val_loss"], label="val_loss")
-plt.plot(np.arange(0, EPOCHS), H.history["acc"], label="train_acc")
-plt.plot(np.arange(0, EPOCHS), H.history["val_acc"], label="val_acc")
-plt.title("Training Loss and Accuracy on Dataset")
-plt.xlabel("Epoch #")
-plt.ylabel("Loss/Accuracy")
-plt.legend(loc="lower left")
-plt.savefig(args["plot"])
+plt.plot(np.arange(0, EPOCHS), H.history['loss'], label='train_loss')
+plt.plot(np.arange(0, EPOCHS), H.history['val_loss'], label='val_loss')
+plt.plot(np.arange(0, EPOCHS), H.history['accuracy'], label='train_acc')
+plt.plot(np.arange(0, EPOCHS), H.history['val_accuracy'], label='val_acc')
+plt.title('Training Loss and Accuracy on Dataset')
+plt.xlabel('Epoch #')
+plt.ylabel('Loss/Accuracy')
+plt.legend(loc='lower left')
+plt.savefig(args['plot'])
