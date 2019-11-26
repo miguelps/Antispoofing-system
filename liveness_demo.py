@@ -1,7 +1,7 @@
 """
 Created on Mon Mar 25 21:29:05 2019
 @author: bhaum
-Modifyed:
+Modified:
 Miguel Pari Soto
 """
 
@@ -130,8 +130,7 @@ while True:
     cv2.imshow('Frame', frame)
     e2 = cv2.getTickCount()
     time1 = (e2 - e1) / cv2.getTickFrequency()
-    print(f'[INFO] elasped time: {time1:.2f}')
-    print(f'[INFO] approx. FPS: {1/time1:.2f}')
+    print(f'[INFO] elapsed time ~ {time1:.2f}, FPS ~ {1/time1:.2f}')
     key = cv2.waitKey(1) & 0xFF
 
     # if the `q` key was pressed, break from the loop
