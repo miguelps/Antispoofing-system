@@ -1,7 +1,10 @@
-# USAGE
+#!/usr/bin/env python
+#
+# # USAGE
 # python train_liveness.py --dataset dataset --model liveness.model --le le.pickle
 
 # set the matplotlib backend so figures can be saved in the background
+
 import matplotlib
 matplotlib.use('Agg')
 
@@ -31,16 +34,11 @@ ap.add_argument('-m',
                 '--model',
                 type=str,
                 required=True,
-                help='path to trained model (output)')
-ap.add_argument('-l',
-                '--le',
-                type=str,
-                required=True,
-                help='path to label encoder (output)')
-ap.add_argument('-p',
-                '--plot',
-                type=str,
-                default='plot.png',
+                help='name for trained model/encoder (output)')
+ap.add_argument('-e',
+                '--epochs',
+                type=int,
+                default=10,
                 help='path to output loss/accuracy plot (output)')
 args = vars(ap.parse_args())
 
@@ -48,7 +46,7 @@ args = vars(ap.parse_args())
 # epochs to train for
 INIT_LR = 1e-4
 BS = 64
-EPOCHS = 10
+epochs = args['epochs']
 
 # grab the list of images in our dataset directory, then initialize
 # the list of data (i.e., images) and class images
@@ -60,7 +58,7 @@ labels = []
 
 for imagePath in imagePaths:
     # extract the class label from the filename, load the image and
-    # resize it to be a fixed 32x32 pixels, ignoring aspect ratio
+    # resize it to be a fixed N x N pixels, ignoring aspect ratio
     label = Path(imagePath).parents[1].stem
     image = cv2.imread(imagePath)
     image = cv2.resize(image, (64, 64))
@@ -97,7 +95,7 @@ aug = ImageDataGenerator(rotation_range=20,
 
 # initialize the optimizer and model
 print('[INFO] compiling model...')
-opt = Adam(lr=INIT_LR, decay=INIT_LR / EPOCHS)
+opt = Adam(lr=INIT_LR, decay=INIT_LR / epochs)
 model = LivenessNet.build(width=64,
                           height=64,
                           depth=3,
@@ -106,37 +104,41 @@ model.summary()
 model.compile(loss='binary_crossentropy', optimizer=opt, metrics=['accuracy'])
 
 # train the network
-print(f'[INFO] training network for {EPOCHS} epochs...')
+print(f'[INFO] training network for {epochs} epochs...')
 H = model.fit_generator(aug.flow(trainX, trainY, batch_size=BS),
                         validation_data=(testX, testY),
                         steps_per_epoch=len(trainX) // BS,
-                        epochs=EPOCHS)
+                        epochs=epochs)
 
 # evaluate the network
 print('[INFO] evaluating network...')
 predictions = model.predict(testX, batch_size=BS)
-print(classification_report(testY.argmax(axis=1),
-      predictions.argmax(axis=1),
-      target_names=le.classes_))
+print(
+    classification_report(testY.argmax(axis=1),
+                          predictions.argmax(axis=1),
+                          target_names=le.classes_))
 
 # save the network to disk
-print(f"[INFO] serializing network to '{args['model']}'...")
-model.save(args['model'])
-
+model_name = args['model']
+print(f'[INFO] serializing network to {model_name}\'.* files...')
+model_def = 'spoofing/' + model_name + '.model'
+label_enc = 'spoofing/' + model_name + '.pickle'
+image_png = 'spoofing/' + model_name + '.png'
+model.save(model_def)
 # save the label encoder to disk
-f = open(args['le'], 'wb')
-f.write(pickle.dumps(le))
-f.close()
+file = open(label_enc, 'wb')
+pickle.dump(le, file)
+file.close()
 
 # plot the training loss and accuracy
 plt.style.use('ggplot')
 plt.figure()
-plt.plot(np.arange(0, EPOCHS), H.history['loss'], label='train_loss')
-plt.plot(np.arange(0, EPOCHS), H.history['val_loss'], label='val_loss')
-plt.plot(np.arange(0, EPOCHS), H.history['accuracy'], label='train_acc')
-plt.plot(np.arange(0, EPOCHS), H.history['val_accuracy'], label='val_acc')
+plt.plot(np.arange(0, epochs), H.history['loss'], label='train_loss')
+plt.plot(np.arange(0, epochs), H.history['val_loss'], label='val_loss')
+plt.plot(np.arange(0, epochs), H.history['accuracy'], label='train_acc')
+plt.plot(np.arange(0, epochs), H.history['val_accuracy'], label='val_acc')
 plt.title('Training Loss and Accuracy on Dataset')
 plt.xlabel('Epoch #')
 plt.ylabel('Loss/Accuracy')
 plt.legend(loc='lower left')
-plt.savefig(args['plot'])
+plt.savefig(image_png)
